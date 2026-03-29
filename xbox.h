@@ -12,27 +12,28 @@
 #define XBOX_TYPE_BUTTON 0x01
 #define XBOX_TYPE_AXIS 0x02
 
+// Temporary mapping for the current third-party controller, based on local calibration.
 #define XBOX_BUTTON_A 0x00
 #define XBOX_BUTTON_B 0x01
-#define XBOX_BUTTON_X 0x02
-#define XBOX_BUTTON_Y 0x03
-#define XBOX_BUTTON_LB 0x04
-#define XBOX_BUTTON_RB 0x05
-#define XBOX_BUTTON_START 0x06
-#define XBOX_BUTTON_BACK 0x07
-#define XBOX_BUTTON_HOME 0x08
-#define XBOX_BUTTON_LO 0x09 /* 左摇杆按键 */
-#define XBOX_BUTTON_RO 0x0a /* 右摇杆按键 */
+#define XBOX_BUTTON_X 0x03
+#define XBOX_BUTTON_Y 0x04
+#define XBOX_BUTTON_LB 0x06
+#define XBOX_BUTTON_RB 0x07
+#define XBOX_BUTTON_BACK 0x0a
+#define XBOX_BUTTON_START 0x0b
+#define XBOX_BUTTON_HOME 0x0c
+#define XBOX_BUTTON_LO 0x0d /* 左摇杆按键 */
+#define XBOX_BUTTON_RO 0x0e /* 右摇杆按键 */
 
 #define XBOX_BUTTON_ON 0x01
 #define XBOX_BUTTON_OFF 0x00
 
 #define XBOX_AXIS_LX 0x00 /* 左摇杆X轴 */
 #define XBOX_AXIS_LY 0x01 /* 左摇杆Y轴 */
-#define XBOX_AXIS_RX 0x03 /* 右摇杆X轴 */
-#define XBOX_AXIS_RY 0x04 /* 右摇杆Y轴 */
-#define XBOX_AXIS_LT 0x02
-#define XBOX_AXIS_RT 0x05
+#define XBOX_AXIS_RX 0x02 /* 右摇杆X轴 */
+#define XBOX_AXIS_RY 0x03 /* 右摇杆Y轴 */
+#define XBOX_AXIS_LT 0x05
+#define XBOX_AXIS_RT 0x04
 #define XBOX_AXIS_XX 0x06 /* 方向键X轴 */
 #define XBOX_AXIS_YY 0x07 /* 方向键Y轴 */
 

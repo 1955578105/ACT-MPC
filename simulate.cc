@@ -2821,8 +2821,77 @@ namespace mujoco
       pending_.ui_update_ctrl = false;
     }
 
-    // render scene
-    mjr_render(rect, &this->scn, &this->platform_ui->mjr_context());
+    // Always keep rangefinder rays hidden in the on-screen renderer.
+    this->opt.flags[mjVIS_RANGEFINDER] = 0;
+
+    // render scene: left half keeps the recording camera, right half shows a tracking debug view.
+    mjrRect left_rect = rect;
+    mjrRect right_rect = rect;
+    left_rect.width = rect.width / 2;
+    right_rect.left = rect.left + left_rect.width;
+    right_rect.width = rect.width - left_rect.width;
+
+    mjr_render(left_rect, &this->scn, &this->platform_ui->mjr_context());
+
+    if (right_rect.width > 0 && this->m_ && this->d_)
+    {
+      mjvCamera debug_cam;
+      mjv_defaultCamera(&debug_cam);
+      debug_cam.type = mjCAMERA_FREE;
+      debug_cam.distance = 4.2;
+      debug_cam.azimuth = 180.0;
+      debug_cam.elevation = -90.0;
+
+      int debug_body_id = mj_name2id(this->m_, mjOBJ_BODY, "base_link");
+      if (debug_body_id < 0 && this->m_->nbody > 1)
+      {
+        debug_body_id = 1;
+      }
+
+      if (debug_body_id >= 0)
+      {
+        mju_copy3(debug_cam.lookat, this->d_->xpos + 3 * debug_body_id);
+        const mjtNum* body_xmat = this->d_->xmat + 9 * debug_body_id;
+        const double yaw_deg = std::atan2(body_xmat[3], body_xmat[0]) * 180.0 / mjPI;
+        debug_cam.azimuth = yaw_deg;
+      }
+
+      mjv_updateScene(this->m_, this->d_, &this->opt, &this->pert, &debug_cam, mjCAT_ALL, &this->scn);
+
+      const int lidar_site_id = mj_name2id(this->m_, mjOBJ_SITE, "lidar_site_000");
+      const int lidar_sensor_id = mj_name2id(this->m_, mjOBJ_SENSOR, "lidar_000");
+      if (lidar_site_id >= 0 && lidar_sensor_id >= 0 && this->scn.ngeom < this->scn.maxgeom)
+      {
+        const mjtNum* from = this->d_->site_xpos + 3 * lidar_site_id;
+        const mjtNum* site_xmat = this->d_->site_xmat + 9 * lidar_site_id;
+        const mjtNum measured_range = this->d_->sensordata[this->m_->sensor_adr[lidar_sensor_id]];
+        const mjtNum line_length = measured_range >= 0 ? measured_range : 2.0;
+        mjtNum to[3] = {
+            from[0] + site_xmat[2] * line_length,
+            from[1] + site_xmat[5] * line_length,
+            from[2] + site_xmat[8] * line_length};
+        mjvGeom* ray_geom = this->scn.geoms + this->scn.ngeom++;
+        const mjtNum size[3] = {0.0, 0.0, 0.0};
+        const mjtNum pos[3] = {0.0, 0.0, 0.0};
+        const mjtNum mat[9] = {1.0, 0.0, 0.0,
+                               0.0, 1.0, 0.0,
+                               0.0, 0.0, 1.0};
+        const float rgba[4] = {1.0f, 0.9f, 0.1f, 1.0f};
+        mjv_initGeom(ray_geom, mjGEOM_LINE, size, pos, mat, rgba);
+        mjv_connector(ray_geom, mjGEOM_LINE, 4.0, from, to);
+      }
+
+      mjr_render(right_rect, &this->scn, &this->platform_ui->mjr_context());
+
+      mjr_overlay(mjFONT_NORMAL, mjGRID_TOPLEFT, left_rect, "camera1", nullptr,
+                  &this->platform_ui->mjr_context());
+      mjr_overlay(mjFONT_NORMAL, mjGRID_TOPLEFT, right_rect, "debug view", nullptr,
+                  &this->platform_ui->mjr_context());
+    }
+    else
+    {
+      mjr_render(rect, &this->scn, &this->platform_ui->mjr_context());
+    }
 
     // show last loading error
     if (this->load_error[0])

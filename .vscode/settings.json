@@ -1,0 +1,27 @@
+{
+  "python-envs.defaultEnvManager": "ms-python.python:conda",
+  "python-envs.defaultPackageManager": "ms-python.python:conda",
+  "powermode.enabled": true,
+  "powermode.shake.enabled": false,
+  "powermode.presets": "fireworks",
+  "background.fullscreen": {
+    "useFront": true,
+    "style": {
+      "background-position": "100% 100%",
+      "background-size": "cover"
+      // "opacity": 1,
+    },
+    // "styles": [
+    //   {},
+    //   {},
+    //   {}
+    // ],
+    // `images` 支持在线和本地图片，以及文件夹。
+    "images": [
+      "/home/zhangzhong/图片/zy.jpg"
+    ],
+    "interval": 0,
+    "random": false
+  },
+  "git.ignoreLimitWarning": true
+}

@@ -57,25 +57,31 @@ namespace mujoco
       mju_error("could not initialize GLFW");
     }
 
-    // multisampling
-    Glfw().glfwWindowHint(GLFW_SAMPLES, 4);
-    Glfw().glfwWindowHint(GLFW_VISIBLE, 1);
-
     // get video mode and save
     vidmode_ = *Glfw().glfwGetVideoMode(Glfw().glfwGetPrimaryMonitor());
 
+    const int default_window_width = (2 * vidmode_.width) / 3;
+    const int default_window_height = (2 * vidmode_.height) / 3;
+    window_size_ = {default_window_width, default_window_height};
+    window_pos_ = {(vidmode_.width - default_window_width) / 2,
+                   (vidmode_.height - default_window_height) / 2};
+
+    // multisampling
+    Glfw().glfwWindowHint(GLFW_SAMPLES, 4);
+    Glfw().glfwWindowHint(GLFW_VISIBLE, 1);
+    Glfw().glfwWindowHint(GLFW_DECORATED, GLFW_TRUE);
+
     // create window
-    window_ = Glfw().glfwCreateWindow((2 * vidmode_.width) / 3,
-                                      (2 * vidmode_.height) / 3,
+    window_ = Glfw().glfwCreateWindow(window_size_.first,
+                                      window_size_.second,
                                       "MuJoCo", nullptr, nullptr);
     if (!window_)
     {
       mju_error("could not create window");
     }
 
-    // save window position and size
-    Glfw().glfwGetWindowPos(window_, &window_pos_.first, &window_pos_.second);
-    Glfw().glfwGetWindowSize(window_, &window_size_.first, &window_size_.second);
+    borderless_fullscreen_ = false;
+    ::glfwSetWindowPos(window_, window_pos_.first, window_pos_.second);
 
     // set callbacks
     Glfw().glfwSetWindowUserPointer(window_, this);
@@ -203,26 +209,25 @@ namespace mujoco
 
   void GlfwAdapter::ToggleFullscreen()
   {
-    // currently full screen: switch to windowed
-    if (Glfw().glfwGetWindowMonitor(window_))
+    if (borderless_fullscreen_)
     {
-      // restore window from saved data
+      ::glfwSetWindowAttrib(window_, GLFW_DECORATED, GLFW_TRUE);
       Glfw().glfwSetWindowMonitor(window_, nullptr, window_pos_.first, window_pos_.second,
                                   window_size_.first, window_size_.second, 0);
+      ::glfwSetWindowPos(window_, window_pos_.first, window_pos_.second);
+      ::glfwSetWindowSize(window_, window_size_.first, window_size_.second);
+      borderless_fullscreen_ = false;
     }
-
-    // currently windowed: switch to full screen
     else
     {
-      // save window data
       Glfw().glfwGetWindowPos(window_, &window_pos_.first, &window_pos_.second);
       Glfw().glfwGetWindowSize(window_, &window_size_.first,
                                &window_size_.second);
-
-      // switch
-      Glfw().glfwSetWindowMonitor(window_, Glfw().glfwGetPrimaryMonitor(), 0,
-                                  0, vidmode_.width, vidmode_.height,
-                                  vidmode_.refreshRate);
+      ::glfwSetWindowAttrib(window_, GLFW_DECORATED, GLFW_FALSE);
+      Glfw().glfwSetWindowMonitor(window_, nullptr, 0, 0, vidmode_.width, vidmode_.height, 0);
+      ::glfwSetWindowPos(window_, 0, 0);
+      ::glfwSetWindowSize(window_, vidmode_.width, vidmode_.height);
+      borderless_fullscreen_ = true;
     }
   }
 

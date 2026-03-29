@@ -14,11 +14,14 @@
 #include <memory>
 #include <list>
 #include <vector>
+#include <string>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sstream>
-
+#include "json.hpp"
+#include <fstream>
+#include "policy_onnx.h"
 using namespace std;
 #include "Self_mujoco_lib.h"
 using RMT = Eigen::Matrix3f;
@@ -123,6 +126,7 @@ namespace Quad
   {
     // 键盘发出的命令是相对 机器狗自身的
     extern float dVxb, dVyb, dWzb, dWzO;
+    extern int ReceiveCommandMode;
     //  变成向量形式         在世界中的期望
     extern Eigen::Vector3f dVb, dVO, dWb, dWO;
     extern float dFaiz, dHb, dFaix, dFaiy; //  期望偏航角  期望机身高度
@@ -151,6 +155,17 @@ namespace Quad
 
 };
 
+struct episode
+{
+  vector<vector<float>> state;
+  vector<vector<float>> radar;
+  vector<string> image;
+  vector<float> timestep;
+  vector<vector<float>> commands;
+};
+bool EpisodeCaptureData(const float hz, const int time,
+                        const mjModel *model, mjData *data,
+                        const std::string &filepath, const std::string &filename);
 class DataVisualizer
 {
 private:

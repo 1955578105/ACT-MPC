@@ -18,6 +18,11 @@ compile_commands.json
 basic
 find.txt
 ss.sh
+capture/
+lerobot_dataset/
+onnx_policy/
+policy/
+build/
 # --- IDE/编辑器（如 VS Code） ---
 .vscode/       # 忽略 VS Code 的个人配置
 c_cpp_properties.json

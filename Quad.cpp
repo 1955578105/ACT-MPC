@@ -1,3 +1,9 @@
+#include <chrono>
+#include <cmath>
+#include <filesystem>
+#include <iomanip>
+
+#include "lodepng.h"
 #include "Quad.h"
 #include "xbox.h"
 
@@ -32,22 +38,23 @@ namespace Quad
     {
       if (currentState == squat)
       {
-        // 检查关节角度
-        return BUSY;
+        // 此时kf 不准 无法判断
+        return FREE;
       }
       else if (currentState == stand)
       {
-        // 检查关节角度
-        return BUSY;
+        if (KF::vcom[0] > 0.05 || KF::vcom[1] > 0.05)
+          return BUSY;
+        else
+          return FREE;
       }
       else if (currentState == move)
       {
         // 检查关节角度
-        return BUSY;
+        return FREE;
       }
       return BUSY;
     }
-
     // 状态转换  成功返回1 失败返回0
     int StateTran(const FSMstate &Goalstate)
     {
@@ -315,31 +322,31 @@ namespace Quad
           float h_end = Pswend[i][2];
 
           // 位置：起点到终点的线性插值 + 完美的半个正弦波抬高
-          FootdesirePos[i][2] = h_start + (h_end - h_start) * u + dfooth * sin(M_PI * u);
-          // 速度：严格遵守微积分链式法则求导
-          FootdesireVelocity[i][2] = ((h_end - h_start) + dfooth * M_PI * cos(M_PI * u)) / swperiod;
-          // float h_peak = dfooth;
-          // if (u <= 0.5f)
-          // {
-          //   float t2 = 2.0f * u;
-          //   float h_start = Pstend[i][2];
-          //   FootdesirePos[i][2] = h_start + (h_peak - h_start) * (3.0f * pow(t2, 2) - 2.0f * pow(t2, 3));
-          //   FootdesireVelocity[i][2] = (h_peak - h_start) * (6.0f * t2 - 6.0f * pow(t2, 2)) * 2.0f / swperiod;
-          // }
-          // else
-          // {
-          //   float t2 = 2.0f * u - 1.0f;
-          //   float h_end = Pswend[i][2];
-          //   FootdesirePos[i][2] = h_peak + (h_end - h_peak) * (3.0f * pow(t2, 2) - 2.0f * pow(t2, 3));
-          //   FootdesireVelocity[i][2] = (h_end - h_peak) * (6.0f * t2 - 6.0f * pow(t2, 2)) * 2.0f / swperiod;
-          // }
+          // FootdesirePos[i][2] = h_start + (h_end - h_start) * u + dfooth * sin(M_PI * u);
+          // // 速度：严格遵守微积分链式法则求导
+          // FootdesireVelocity[i][2] = ((h_end - h_start) + dfooth * M_PI * cos(M_PI * u)) / swperiod;
+          float h_peak = dfooth;
+          if (u <= 0.5f)
+          {
+            float t2 = 2.0f * u;
+            float h_start = Pstend[i][2];
+            FootdesirePos[i][2] = h_start + (h_peak - h_start) * (3.0f * pow(t2, 2) - 2.0f * pow(t2, 3));
+            FootdesireVelocity[i][2] = (h_peak - h_start) * (6.0f * t2 - 6.0f * pow(t2, 2)) * 2.0f / swperiod;
+          }
+          else
+          {
+            float t2 = 2.0f * u - 1.0f;
+            float h_end = Pswend[i][2];
+            FootdesirePos[i][2] = h_peak + (h_end - h_peak) * (3.0f * pow(t2, 2) - 2.0f * pow(t2, 3));
+            FootdesireVelocity[i][2] = (h_end - h_peak) * (6.0f * t2 - 6.0f * pow(t2, 2)) * 2.0f / swperiod;
+          }
         }
 
-        else
-        {
+        // else
+        // {
 
-          FootdesireVelocity[i].setZero();
-        }
+        //   FootdesireVelocity[i].setZero();
+        // }
       }
     }
   };
@@ -400,7 +407,7 @@ namespace Quad
 
       // 3. 偏航角 Yaw (Faiz)
       Faiz = std::atan2(2.0f * (w * z + x * y), 1.0f - 2.0f * (y * y + z * z));
-      std::cout << "Faiz==" << Faiz << std::endl;
+      // std::cout << "Faiz==" << Faiz << std::endl;
       B2W << 1 - 2 * y * y - 2 * z * z, 2 * x * y - 2 * w * z, 2 * x * z + 2 * w * y,
           2 * x * y + 2 * w * z, 1 - 2 * x * x - 2 * z * z, 2 * y * z - 2 * w * x,
           2 * x * z - 2 * w * y, 2 * y * z + 2 * w * x, 1 - 2 * x * x - 2 * y * y;
@@ -614,7 +621,7 @@ namespace Quad
       K = _P * H.transpose() * S_inv;
 
       X = _X + K * (Z - H * _X);
-      // 保证协方差矩阵的严格对称性 (Joseph form)，防止浮点误差导致 P 变得不对称发散
+      // 保证协方差矩阵的严格对称性 ( Joseph form)，防止浮点误差导致 P 变得不对称发散
       P = (iden18 - K * H) * _P;
       P = 0.5f * (P + P.transpose()); // 强制对称化保护！
       // K = (_P * (H.transpose())) * ((H * _P * H.transpose() + R).inverse());
@@ -634,6 +641,7 @@ namespace Quad
 
     /// @brief 期望速度和角速度
     float dVxb = 0.0, dVyb = 0.0, dWzb = 0, dWzO = 0;
+    int ReceiveCommandMode = 0;
     float dFaiz, dHb = 0.29, dFaix, dFaiy;
     Eigen::Vector3f dVb;
     Eigen::Vector3f dVO;
@@ -648,12 +656,18 @@ namespace Quad
     Eigen::MatrixXf D(13 * h, 1);
     void Update_ins()
     {
+      if (ReceiveCommandMode != 0)
+      {
+        std::cout << "Deployment mode: skip Xbox input thread." << std::endl;
+        return;
+      }
+
       int xbox_fd;
       int len, type;
       int axis_value, button_value;
       int number_of_axis, number_of_buttons;
 
-      memset(&map, 0, sizeof(xbox_map_t));
+      memset(&::map, 0, sizeof(xbox_map_t));
       bool xbox_connected = false;
       while (!xbox_connected)
       {
@@ -675,7 +689,7 @@ namespace Quad
       {
         auto startTime = std::chrono::steady_clock::now();
 
-        len = xbox_map_read(xbox_fd, &map);
+        len = xbox_map_read(xbox_fd, &::map);
 
         if (len < 0)
         {
@@ -709,24 +723,80 @@ namespace Quad
     }
     bool Lock_state = true;
 
+    // 0 是录制模式   1 是部署
+    void Receiva_command(const mjModel *model, mjData *data, int mode = 0)
+    {
+      if (mode == 0)
+      {
+        float dy = clip(((float)-::map.lx) / 32767.0f, -0.5f, 0.5f);
+        float dx = clip(((float)-::map.ly) / 32767.0f, -0.6f, 0.6f);
+        float dz = clip(((float)-::map.rx) / 32767.0f, -1.f, 1.f);
+        dVxb = 0.7 * dVxb + 0.3 * dx;
+        dVyb = 0.7 * dVyb + 0.3 * dy;
+        dWzb = 0.7 * dWzb + 0.3 * dz;
+        if (std::abs(dVxb) < 0.001f)
+          dVxb = 0;
+        if (std::abs(dVyb) < 0.001f)
+          dVyb = 0;
+        if (std::abs(dWzb) < 0.001f)
+          dWzb = 0;
+      }
+      else
+      {
+        std::vector<float> state;
+        state.reserve(93);
+        state.push_back(Quad::KF::vcom[0]);
+        state.push_back(Quad::KF::vcom[1]);
+        state.push_back(Quad::KF::Wb[2]);
+
+        std::vector<float> lidar = mujo::get_lidar_scan_90(model, data);
+
+        state.insert(state.end(), lidar.begin(), lidar.end());
+        std::array<float, 3> action_out;
+        std::string error;
+        bool getaction = actdog::InferActPolicyActionFromMujoco(
+            "/home/Actdog/onnx_policy/model_deploy.onnx",
+            "/home/Actdog/onnx_policy/model_deploy.json",
+            data ? data->time : 0.0,
+            model,
+            data,
+            state,
+            action_out,
+            "camera1",
+            &error);
+        if (getaction)
+        {
+          dVxb = action_out[0];
+          dVyb = action_out[1];
+          dWzb = action_out[2];
+          std::cout << "dVxb>" << dVxb << std::endl;
+          std::cout << "dVyb>" << dVyb << std::endl;
+          std::cout << "dWzb>" << dWzb << std::endl;
+        }
+        else
+        {
+          std::cout << "get action failed: " << error << std::endl;
+        }
+      }
+    }
     void Desire_ins_update(float MPCtime) // 这个仅能根据当前状态 估计下一次状态  ， 但是需要估计未来多个时间段的状态
     {
 
-      float dy = clip(((float)-map.lx) / 32767.0f, -1.f, 1.f);
-      float dx = clip(((float)-map.ly) / 32767.0f, -1.f, 1.f);
-      float dz = clip(((float)-map.lt) / 32767.0f, -1.f, 1.f);
-      dVxb = 0.7 * dVxb + 0.3 * dx;
-      dVyb = 0.7 * dVyb + 0.3 * dy;
-      dWzb = 0.7 * dWzb + 0.3 * dz;
-      if (dVxb < 0.001f)
-        dVxb = 0;
-      if (dVyb < 0.001f)
-        dVyb = 0;
-      if (dWzb < 0.001f)
-        dWzb = 0;
-      std::cout << "dVxb-->" << dVxb << std::endl;
-      std::cout << "dVyb-->" << dVyb << std::endl;
-      std::cout << "dWzb-->" << dWzb << std::endl;
+      // float dy = clip(((float)-::map.lx) / 32767.0f, -0.5f, 0.5f);
+      // float dx = clip(((float)-::map.ly) / 32767.0f, -0.6f, 0.6f);
+      // float dz = clip(((float)-::map.rx) / 32767.0f, -1.f, 1.f);
+      // dVxb = 0.7 * dVxb + 0.3 * dx;
+      // dVyb = 0.7 * dVyb + 0.3 * dy;
+      // dWzb = 0.7 * dWzb + 0.3 * dz;
+      // if (std::abs(dVxb) < 0.001f)
+      //   dVxb = 0;
+      // if (std::abs(dVyb) < 0.001f)
+      //   dVyb = 0;
+      // if (std::abs(dWzb) < 0.001f)
+      //   dWzb = 0;
+      // std::cout << "dVxb-->" << dVxb << std::endl;
+      // std::cout << "dVyb-->" << dVyb << std::endl;
+      // std::cout << "dWzb-->" << dWzb << std::endl;
 
       if (dVxb == 0 && dVyb == 0 && dWzb == 0 && FSM::currentState == FSM::FSMstate::move)
       {
@@ -2107,13 +2177,13 @@ namespace Quad
     {
 
       static int last_btn_a = 0;
-      if (map.a == 1 && last_btn_a == 0)
+      if (::map.a == 1 && last_btn_a == 0)
       {
         Reset_Robot(model, data, dt);
         last_btn_a = 1;
         return;
       }
-      last_btn_a = map.a;
+      last_btn_a = ::map.a;
       static auto enter = std::chrono::high_resolution_clock::now();
       static int times = 0;
       auto now = std::chrono::high_resolution_clock::now();
@@ -2133,6 +2203,7 @@ namespace Quad
 
       Gait::Pstend_Update();
       // // 2. 指令更新
+      KeyboardIns::Receiva_command(model, data, KeyboardIns::ReceiveCommandMode);
       KeyboardIns::Desire_ins_update(MPC_T); // MPC_T 预测步长为 0.01s
       // // 3. 步态与轨迹规划 (怎么走)
       Gait::TimeUpdate();
@@ -2182,3 +2253,129 @@ namespace Quad
   }
 
 };
+using json = nlohmann::json;
+
+// 每回合的录制  每秒帧数   录制时间
+bool EpisodeCaptureData(const float hz, const int time,
+                        const mjModel *model, mjData *data,
+                        const std::string &filepath, const std::string &filename)
+{
+  namespace fs = std::filesystem;
+  using clock = std::chrono::steady_clock;
+
+  if (!model || !data || hz <= 0.0f || time <= 0)
+  {
+    return false;
+  }
+
+  static struct episode ep;
+  static auto enter = clock::now();
+  static double next_capture_time = 0.0;
+  static bool episode_saved = false;
+  static float last_hz = -1.0f;
+  static int last_time = -1;
+  static std::string last_filepath;
+  static std::string last_filename;
+
+  const bool config_changed = (last_hz != hz || last_time != time ||
+                               last_filepath != filepath || last_filename != filename);
+  if (config_changed)
+  {
+    ep = {};
+    enter = clock::now();
+    next_capture_time = 0.0;
+    episode_saved = false;
+    last_hz = hz;
+    last_time = time;
+    last_filepath = filepath;
+    last_filename = filename;
+  }
+
+  const auto now = clock::now();
+  const double elapsed_seconds = std::chrono::duration<double>(now - enter).count();
+  const double sample_period = 1.0 / static_cast<double>(hz);
+  const int expected_frames = std::max(1, static_cast<int>(std::ceil(static_cast<double>(hz) * time)));
+
+  if (!episode_saved && elapsed_seconds + 1e-9 >= next_capture_time &&
+      static_cast<int>(ep.timestep.size()) < expected_frames)
+  {
+    fs::path episode_dir(filepath);
+    fs::path image_dir = episode_dir / "images";
+    std::error_code ec;
+    fs::create_directories(image_dir, ec);
+    if (ec)
+    {
+      std::cerr << "EpisodeCaptureData: failed to create directory " << image_dir
+                << " : " << ec.message() << std::endl;
+      return false;
+    }
+
+    vector<float> state = {Quad::KF::vcom[0], Quad::KF::vcom[1], Quad::KF::Wb[2]};
+    vector<float> radars = mujo::get_lidar_scan_90(model, data);
+    vector<unsigned char> rgb;
+    if (!mujo::render_camera_rgb(model, data, "camera1", 160, 120, rgb, true))
+    {
+      std::cerr << "EpisodeCaptureData: failed to render camera1." << std::endl;
+      return false;
+    }
+
+    const size_t frame_id = ep.timestep.size();
+    std::ostringstream image_name;
+    image_name << std::setw(6) << std::setfill('0') << frame_id << ".png";
+    fs::path image_path = image_dir / image_name.str();
+
+    unsigned error = lodepng::encode(image_path.string(), rgb, 160, 120, LCT_RGB);
+    if (error)
+    {
+      std::cerr << "EpisodeCaptureData: failed to save image " << image_path
+                << " : " << lodepng_error_text(error) << std::endl;
+      return false;
+    }
+
+    vector<float> commands = {Quad::KeyboardIns::dVxb, Quad::KeyboardIns::dVyb, Quad::KeyboardIns::dWzb};
+    ep.state.push_back(state);
+    ep.radar.push_back(radars);
+    ep.image.push_back(image_name.str());
+    ep.commands.push_back(commands);
+    ep.timestep.push_back(static_cast<float>(elapsed_seconds));
+
+    next_capture_time += sample_period;
+  }
+
+  const bool time_reached = elapsed_seconds + 1e-9 >= static_cast<double>(time);
+  const bool frame_reached = static_cast<int>(ep.timestep.size()) >= expected_frames;
+
+  if (!episode_saved && (time_reached || frame_reached) && !ep.timestep.empty())
+  {
+    fs::path episode_dir(filepath);
+    std::error_code ec;
+    fs::create_directories(episode_dir, ec);
+    if (ec)
+    {
+      std::cerr << "EpisodeCaptureData: failed to create episode directory " << episode_dir
+                << " : " << ec.message() << std::endl;
+      return false;
+    }
+
+    json j;
+    j["observation.state"] = ep.state;
+    j["observation.radar"] = ep.radar;
+    j["observation.images.front"] = ep.image;
+    j["timestamp"] = ep.timestep;
+    j["action"] = ep.commands;
+    fs::path json_path = episode_dir / filename;
+    ofstream file(json_path);
+    if (!file.is_open())
+    {
+      std::cerr << "EpisodeCaptureData: failed to open json file " << json_path << std::endl;
+      return false;
+    }
+
+    file << j.dump();
+    file.close();
+    episode_saved = true;
+    return true;
+  }
+
+  return false;
+}
